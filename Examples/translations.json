@@ -1,0 +1,33 @@
+{
+  "My App Title": {
+    "en": "My App Title",
+    "es": "Título de Mi Aplicación",
+    "fr": "Titre de Mon Application",
+    "pt": "Título do Meu Aplicativo"
+  },
+  "Welcome to the App": {
+    "en": "Welcome to the App",
+    "es": "Bienvenido a la Aplicación",
+    "fr": "Bienvenue dans l'Application",
+    "pt": "Bem-vindo ao Aplicativo"
+  },
+  "Hello, how are you?": {
+    "en": "Hello, how are you?",
+    "es": "Hola, ¿cómo estás?",
+    "fr": "Bonjour, comment ça va?",
+    "pt": "Olá, como vai você?"
+  },
+  "Welcome to our app!": {
+    "en": "Welcome to our app!",
+    "es": "¡Bienvenido a nuestra aplicación!",
+    "fr": "Bienvenue dans notre application!",
+    "pt": "Bem-vindo ao nosso aplicativo!"
+  },
+  "Submit your details below": {
+    "en": "Submit your details below",
+    "es": "Envíe sus detalles a continuación",
+    "fr": "Soumettez vos informations ci-dessous",
+    "pt": "Envie seus dados abaixo"
+  }
+}
+

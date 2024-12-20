@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.bosonshiggs.componentstranslate">
+
+    <application>
+        <!-- Outras tags específicas da aplicação podem ser adicionadas aqui -->
+    </application>
+
+    <!-- Permissão para acessar leitura de armazenamento externo -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+</manifest>
+
