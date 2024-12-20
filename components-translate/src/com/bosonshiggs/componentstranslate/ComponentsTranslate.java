@@ -2,7 +2,6 @@ package com.bosonshiggs.ComponentsTranslate;
 
 import com.google.appinventor.components.annotations.*;
 import com.google.appinventor.components.runtime.*;
-import com.google.appinventor.components.common.ComponentCategory;
 import com.google.appinventor.components.common.PropertyTypeConstants;
 import com.google.appinventor.components.common.FileScope;
 import com.google.appinventor.components.runtime.util.FileStreamReadOperation;
@@ -21,11 +20,8 @@ import java.util.Scanner;
     version = 2,
     versionName = "1.3",
     description = "Extension to translate components using a JSON file with translations.",
-    iconName = "icon.png",
-    category = ComponentCategory.EXTENSION,
-    nonVisible = true
+    iconName = "icon.png"
 )
-@SimpleObject(external = true)
 public class ComponentsTranslate extends AndroidNonvisibleComponent {
 
     private JSONObject translations = new JSONObject(); // Armazena as traduções carregadas
