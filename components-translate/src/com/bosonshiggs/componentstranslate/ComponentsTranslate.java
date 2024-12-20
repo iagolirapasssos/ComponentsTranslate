@@ -14,18 +14,21 @@ import android.content.res.AssetManager;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.Scanner;
 
 @DesignerComponent(
-    version = 2,
-    versionName = "1.3",
-    description = "Extension to translate components using a JSON file with translations.",
+    version = 3,
+    versionName = "1.4",
+    description = "Extension to translate components using a JSON file or URL with translations.",
     iconName = "icon.png"
 )
 public class ComponentsTranslate extends AndroidNonvisibleComponent {
 
     private JSONObject translations = new JSONObject(); // Armazena as traduções carregadas
     private String targetLanguage = "en"; // Idioma padrão
+    private boolean loggingEnabled = false; // Logs habilitados por padrão
 
     public ComponentsTranslate(ComponentContainer container) {
         super(container.$form());
@@ -40,65 +43,118 @@ public class ComponentsTranslate extends AndroidNonvisibleComponent {
         this.targetLanguage = language;
     }
 
-    @SimpleProperty(description = "Returns the default language.",
-                    category = PropertyCategory.BEHAVIOR)
+    @SimpleProperty(description = "Returns the target language.",
+    				category = PropertyCategory.BEHAVIOR)
     public String TargetLanguage() {
         return this.targetLanguage;
     }
 
-    @SimpleFunction(description = "Load translations from a JSON file named 'translations.json' located in the assets directory.")
-    public void LoadTranslations(final String fileName) {
+    @DesignerProperty(
+        editorType = PropertyTypeConstants.PROPERTY_TYPE_BOOLEAN,
+        defaultValue = "true"
+    )
+    @SimpleProperty(description = "Enable or disable logging for debugging purposes.")
+    public void LoggingEnabled(boolean enabled) {
+        this.loggingEnabled = enabled;
+    }
+
+    @SimpleProperty(description = "Returns whether logging is enabled.",
+    				category = PropertyCategory.BEHAVIOR)
+    public boolean LoggingEnabled() {
+        return this.loggingEnabled;
+    }
+
+    @SimpleFunction(description = "Load translations from a JSON file or URL.")
+    public void LoadTranslations(String source) {
+        if (source.startsWith("http://") || source.startsWith("https://")) {
+            loadTranslationsFromUrl(source);
+        } else {
+            loadTranslationsFromFile(source);
+        }
+    }
+    
+    private void loadTranslationsFromFile(final String fileName) {
         try {
             String fileNameBar = "//" + fileName;
-
             new FileStreamReadOperation(form, this, "LoadTranslations", fileNameBar, FileScope.Asset, true) {
                 @Override
                 public boolean process(String contents) {
-                    try {
-                        translations = new JSONObject(contents);
-                        Log.i("ComponentsTranslate", "Translations loaded successfully from: " + fileNameBar);
-                        form.runOnUiThread(() -> OnTranslationsLoaded(true, "Translations loaded successfully."));
-                        return true;
-                    } catch (JSONException e) {
-                        Log.e("ComponentsTranslate", "Error parsing JSON: " + e.getMessage());
-                        form.runOnUiThread(() -> OnJsonLoadError("Invalid JSON format."));
-                        return false;
-                    }
+                    return processTranslations(contents, fileNameBar);
                 }
 
                 @Override
                 public void onError(IOException e) {
-                    Log.e("ComponentsTranslate", "Error reading file: " + e.getMessage());
+                    logError("Error reading file: " + e.getMessage());
                     form.runOnUiThread(() -> OnJsonLoadError("File not found or cannot be read."));
                 }
             }.run();
         } catch (Exception e) {
-            Log.e("ComponentsTranslate", "Unexpected error: " + e.getMessage());
+            logError("Unexpected error: " + e.getMessage());
             OnJsonLoadError("Unexpected error: " + e.getMessage());
         }
     }
 
+    private void loadTranslationsFromUrl(String urlString) {
+        new Thread(() -> {
+            try {
+                URL url = new URL(urlString);
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.connect();
+
+                int responseCode = connection.getResponseCode();
+                if (responseCode == HttpURLConnection.HTTP_OK) {
+                    InputStream inputStream = connection.getInputStream();
+                    String contents = new Scanner(inputStream).useDelimiter("\\A").next();
+                    inputStream.close();
+                    processTranslations(contents, urlString);
+                } else {
+                    logError("HTTP error code: " + responseCode);
+                    form.runOnUiThread(() -> OnJsonLoadError("Failed to load translations from URL."));
+                }
+            } catch (IOException e) {
+                logError("Error loading URL: " + e.getMessage());
+                form.runOnUiThread(() -> OnJsonLoadError("Failed to load translations from URL."));
+            }
+        }).start();
+    }
+
+    private boolean processTranslations(String contents, String source) {
+        try {
+            translations = new JSONObject(contents);
+            logInfo("Translations loaded successfully from: " + source);
+            form.runOnUiThread(() -> OnTranslationsLoaded(true, "Translations loaded successfully."));
+            return true;
+        } catch (JSONException e) {
+            logError("Error parsing JSON: " + e.getMessage());
+            form.runOnUiThread(() -> OnJsonLoadError("Invalid JSON format."));
+            return false;
+        }
+    }
+    
     @SimpleFunction(description = "Translate a given text based on the loaded JSON file.")
 	public String ReplaceTexts(String text) {
 		try {
 		    // Verifica se o texto traduzido é conhecido
-		    String originalText = new TranslationManager().getOriginalText(form.getApplicationContext(), text);
+		    TranslationManager translationManager = new TranslationManager();
+		    String originalText = translationManager.getOriginalText(form.getApplicationContext(), text);
 		    
 		    // Busca a tradução
 		    String translatedText = getTranslation(originalText);
 
 		    // Salva a nova tradução
-		    new TranslationManager().saveTranslation(form.getApplicationContext(), originalText, translatedText);
+		    translationManager.saveTranslation(form.getApplicationContext(), originalText, translatedText);
 
-		    Log.i("ComponentsTranslate", "Translation completed: " + text + " -> " + translatedText);
+		    // Log da tradução, se habilitado
+		    logInfo("Translation completed: " + originalText + " -> " + translatedText);
 		    return translatedText;
 		} catch (Exception e) {
-		    Log.e("ComponentsTranslate", "Error translating text: " + text, e);
+		    logError("Error translating text: " + text + " | " + e.getMessage());
 		    return text; // Retorna o texto original em caso de erro
 		}
 	}
 
-    private String getTranslation(String originalText) {
+	private String getTranslation(String originalText) {
 		try {
 		    if (translations.has(originalText)) {
 		        JSONObject languageMap = translations.getJSONObject(originalText);
@@ -107,38 +163,55 @@ public class ComponentsTranslate extends AndroidNonvisibleComponent {
 		        }
 		    }
 		} catch (JSONException e) {
-		    Log.e("ComponentsTranslate", "Error getting translation for: " + originalText, e);
+		    logError("Error getting translation for: " + originalText + " | " + e.getMessage());
 		}
 		return originalText; // Retorna o texto original se não houver tradução
 	}
+	
+	@SimpleFunction(description = "Generates a direct download URL for a Google Drive file from its shared URL.")
+    public String GoogleDriveUrlDirect(String sharedLink) {
+        if (sharedLink == null || !sharedLink.contains("drive.google.com")) {
+            return "Invalid Google Drive link.";
+        }
 
-    
-    private String getOriginalText(String translatedText) {
-		try {
-		    // Itera por todas as chaves do JSON para encontrar o texto original
-		    for (Object keyObj : translations.keySet()) {
-		        String key = keyObj.toString(); // Converte a chave para String
-		        JSONObject languageMap = translations.getJSONObject(key);
+        try {
+            // Extract the file ID from the shared link
+            String fileId = null;
+            if (sharedLink.contains("/file/d/")) {
+                fileId = sharedLink.split("/file/d/")[1].split("/")[0];
+            } else if (sharedLink.contains("id=")) {
+                fileId = sharedLink.split("id=")[1].split("&")[0];
+            }
 
-		        for (Object langObj : languageMap.keySet()) {
-		            String lang = langObj.toString(); // Converte a chave do idioma para String
-		            if (languageMap.getString(lang).equals(translatedText)) {
-		                return key; // Retorna o texto original encontrado
-		            }
-		        }
-		    }
-		} catch (JSONException e) {
-		    Log.e("ComponentsTranslate", "Error getting original text for: " + translatedText, e);
-		}
-		return null; // Retorna null se o texto original não for encontrado
-	}
+            if (fileId != null) {
+                return "https://drive.google.com/uc?export=download&id=" + fileId;
+            } else {
+                return "Could not extract file ID from the link.";
+            }
+        } catch (Exception e) {
+            return "Error processing the link: " + e.getMessage();
+        }
+    }
+
+
+    private void logInfo(String message) {
+        if (loggingEnabled) {
+            Log.i("ComponentsTranslate", message);
+        }
+    }
+
+    private void logError(String message) {
+        if (loggingEnabled) {
+            Log.e("ComponentsTranslate", message);
+        }
+    }
 
     @SimpleEvent(description = "Event fired when translations are successfully loaded.")
     public void OnTranslationsLoaded(boolean success, String message) {
         EventDispatcher.dispatchEvent(this, "OnTranslationsLoaded", success, message);
     }
 
-    @SimpleEvent(description = "Event fired when there is an error loading the JSON file.")
+    @SimpleEvent(description = "Event fired when there is an error loading the JSON file or URL.")
     public void OnJsonLoadError(String errorMessage) {
         EventDispatcher.dispatchEvent(this, "OnJsonLoadError", errorMessage);
     }
